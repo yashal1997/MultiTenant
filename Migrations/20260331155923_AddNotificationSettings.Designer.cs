@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MultiTenant.Api.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using MultiTenant.Api.Infrastructure.Persistence;
 namespace MultiTenant.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260331155923_AddNotificationSettings")]
+    partial class AddNotificationSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -364,97 +367,6 @@ namespace MultiTenant.Api.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Tenants", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantGeneralSetting", b =>
-                {
-                    b.Property<Guid>("TenantGeneralSettingId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AddressLine1")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("AddressLine2")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("CompanyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("CountryCode")
-                        .IsRequired()
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<string>("DateFormat")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int>("FiscalYearStartMonth")
-                        .HasColumnType("int");
-
-                    b.Property<string>("LegalName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("PostalCode")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<string>("StateOrProvince")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("SupportEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("TaxRegistrationNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("TimeZoneId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("WebsiteUrl")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.HasKey("TenantGeneralSettingId");
-
-                    b.HasIndex("TenantId")
-                        .IsUnique();
-
-                    b.ToTable("TenantGeneralSettings", (string)null);
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantUser", b =>
@@ -865,15 +777,6 @@ namespace MultiTenant.Api.Migrations
                     b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantGeneralSetting", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

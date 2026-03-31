@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MultiTenant.Api.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using MultiTenant.Api.Infrastructure.Persistence;
 namespace MultiTenant.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328005723_TenantUserDepartmentAndJobTitle")]
+    partial class TenantUserDepartmentAndJobTitle
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -300,46 +303,6 @@ namespace MultiTenant.Api.Migrations
                     b.ToTable("GlAccounts", (string)null);
                 });
 
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.NotificationSetting", b =>
-                {
-                    b.Property<Guid>("NotificationSettingId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("EmailExpenseApproved")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailExpenseRejected")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailExpenseSubmitted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EmailPendingApprovalsDigest")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("NotificationSettingId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("TenantId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("NotificationSettings", (string)null);
-                });
-
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -364,97 +327,6 @@ namespace MultiTenant.Api.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("Tenants", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantGeneralSetting", b =>
-                {
-                    b.Property<Guid>("TenantGeneralSettingId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AddressLine1")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("AddressLine2")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("City")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("CompanyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("CountryCode")
-                        .IsRequired()
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<string>("DateFormat")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int>("FiscalYearStartMonth")
-                        .HasColumnType("int");
-
-                    b.Property<string>("LegalName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("PostalCode")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<string>("StateOrProvince")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("SupportEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("TaxRegistrationNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("TimeZoneId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("WebsiteUrl")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.HasKey("TenantGeneralSettingId");
-
-                    b.HasIndex("TenantId")
-                        .IsUnique();
-
-                    b.ToTable("TenantGeneralSettings", (string)null);
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantUser", b =>
@@ -527,164 +399,6 @@ namespace MultiTenant.Api.Migrations
                     b.HasIndex("TenantId", "VendorId");
 
                     b.ToTable("Vendors", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Workflow", b =>
-                {
-                    b.Property<Guid>("WorkflowId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("ApplyToAllBusinessUnits")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ApplyToAllDepartments")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ApplyToAllExpenseCategories")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal?>("ApprovalThresholdAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("WorkflowId");
-
-                    b.HasIndex("TenantId", "IsActive");
-
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique();
-
-                    b.HasIndex("TenantId", "WorkflowId");
-
-                    b.ToTable("Workflows", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowBusinessUnitScope", b =>
-                {
-                    b.Property<Guid>("WorkflowBusinessUnitScopeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("BusinessUnitId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("WorkflowBusinessUnitScopeId");
-
-                    b.HasIndex("BusinessUnitId");
-
-                    b.HasIndex("WorkflowId");
-
-                    b.HasIndex("TenantId", "WorkflowId", "BusinessUnitId")
-                        .IsUnique();
-
-                    b.ToTable("WorkflowBusinessUnitScopes", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowDepartmentScope", b =>
-                {
-                    b.Property<Guid>("WorkflowDepartmentScopeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("DepartmentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("WorkflowDepartmentScopeId");
-
-                    b.HasIndex("DepartmentId");
-
-                    b.HasIndex("WorkflowId");
-
-                    b.HasIndex("TenantId", "WorkflowId", "DepartmentId")
-                        .IsUnique();
-
-                    b.ToTable("WorkflowDepartmentScopes", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowExpenseCategoryScope", b =>
-                {
-                    b.Property<Guid>("WorkflowExpenseCategoryScopeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ExpenseCategoryId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("WorkflowExpenseCategoryScopeId");
-
-                    b.HasIndex("ExpenseCategoryId");
-
-                    b.HasIndex("WorkflowId");
-
-                    b.HasIndex("TenantId", "WorkflowId", "ExpenseCategoryId")
-                        .IsUnique();
-
-                    b.ToTable("WorkflowExpenseCategoryScopes", (string)null);
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowStep", b =>
-                {
-                    b.Property<Guid>("WorkflowStepId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ApproverUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("WorkflowId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("WorkflowStepId");
-
-                    b.HasIndex("ApproverUserId");
-
-                    b.HasIndex("WorkflowId", "Sequence")
-                        .IsUnique();
-
-                    b.ToTable("WorkflowSteps", (string)null);
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Identity.ApplicationRole", b =>
@@ -860,24 +574,6 @@ namespace MultiTenant.Api.Migrations
                     b.Navigation("GlAccount");
                 });
 
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.NotificationSetting", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantGeneralSetting", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.TenantUser", b =>
                 {
                     b.HasOne("MultiTenant.Api.Domain.Entities.BusinessUnit", "BusinessUnit")
@@ -895,94 +591,9 @@ namespace MultiTenant.Api.Migrations
                     b.Navigation("Department");
                 });
 
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowBusinessUnitScope", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Domain.Entities.BusinessUnit", "BusinessUnit")
-                        .WithMany()
-                        .HasForeignKey("BusinessUnitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Workflow", "Workflow")
-                        .WithMany("BusinessUnitScopes")
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BusinessUnit");
-
-                    b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowDepartmentScope", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Department", "Department")
-                        .WithMany()
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Workflow", "Workflow")
-                        .WithMany("DepartmentScopes")
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Department");
-
-                    b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowExpenseCategoryScope", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Domain.Entities.ExpenseCategory", "ExpenseCategory")
-                        .WithMany()
-                        .HasForeignKey("ExpenseCategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Workflow", "Workflow")
-                        .WithMany("ExpenseCategoryScopes")
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ExpenseCategory");
-
-                    b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowStep", b =>
-                {
-                    b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("ApproverUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MultiTenant.Api.Domain.Entities.Workflow", "Workflow")
-                        .WithMany("Steps")
-                        .HasForeignKey("WorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Workflow");
-                });
-
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Department", b =>
                 {
                     b.Navigation("BusinessUnits");
-                });
-
-            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Workflow", b =>
-                {
-                    b.Navigation("BusinessUnitScopes");
-
-                    b.Navigation("DepartmentScopes");
-
-                    b.Navigation("ExpenseCategoryScopes");
-
-                    b.Navigation("Steps");
                 });
 #pragma warning restore 612, 618
         }

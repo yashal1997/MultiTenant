@@ -1,8 +1,9 @@
-﻿using MultiTenant.Api.Application.Interfaces;
+using MultiTenant.Api.Application.Interfaces;
 using MultiTenant.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace MultiTenant.Api.Middleware;
 
@@ -93,7 +94,10 @@ public sealed class TenantResolverMiddleware : IMiddleware
         }
 
         // Validate membership
-        var userId = context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        var userId =
+            context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ??
+            context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
         if (!Guid.TryParse(userId, out var uid))
         {
             context.Response.StatusCode = 401;
