@@ -31,6 +31,8 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
     public DbSet<WorkflowBusinessUnitScope> WorkflowBusinessUnitScopes => Set<WorkflowBusinessUnitScope>();
     public DbSet<WorkflowDepartmentScope> WorkflowDepartmentScopes => Set<WorkflowDepartmentScope>();
     public DbSet<WorkflowExpenseCategoryScope> WorkflowExpenseCategoryScopes => Set<WorkflowExpenseCategoryScope>();
+    public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
     public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
     public DbSet<TenantGeneralSetting> TenantGeneralSettings => Set<TenantGeneralSetting>();
 
@@ -77,17 +79,37 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // ----- Vendors (tenant-scoped example) -----
+        // ----- Vendors (tenant-scoped) -----
         builder.Entity<Vendor>(b =>
         {
             b.ToTable("Vendors");
             b.HasKey(x => x.VendorId);
 
+            b.Property(x => x.Code).HasMaxLength(50).IsRequired();
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.LegalName).HasMaxLength(200);
+            b.Property(x => x.Email).HasMaxLength(320);
+            b.Property(x => x.Phone).HasMaxLength(50);
+            b.Property(x => x.Website).HasMaxLength(500);
+            b.Property(x => x.TaxIdentifier).HasMaxLength(80);
+            b.Property(x => x.DefaultCurrency).HasMaxLength(3);
+            b.Property(x => x.AddressLine1).HasMaxLength(200);
+            b.Property(x => x.AddressLine2).HasMaxLength(200);
+            b.Property(x => x.City).HasMaxLength(120);
+            b.Property(x => x.StateRegion).HasMaxLength(120);
+            b.Property(x => x.PostalCode).HasMaxLength(30);
+            b.Property(x => x.Country).HasMaxLength(100);
+            b.Property(x => x.Notes).HasMaxLength(2000);
 
-            // Tenant-first indexes (important for performance)
+            b.HasOne(x => x.DefaultGlAccount)
+                .WithMany()
+                .HasForeignKey(x => x.DefaultGlAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             b.HasIndex(x => new { x.TenantId, x.VendorId });
+            b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.Name });
+            b.HasIndex(x => new { x.TenantId, x.IsActive });
         });
 
         // ----- GL Accounts (tenant-scoped) -----
@@ -157,6 +179,62 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasIndex(x => new { x.TenantId, x.BusinessUnitId });
             b.HasIndex(x => new { x.TenantId, x.DepartmentId, x.Name }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.IsActive });
+        });
+
+        // ----- Budgets (tenant-scoped) -----
+        builder.Entity<Budget>(b =>
+        {
+            b.ToTable("Budgets");
+            b.HasKey(x => x.BudgetId);
+
+            b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Description).HasMaxLength(2000);
+            b.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.TotalAmount).HasPrecision(18, 2);
+
+            b.HasMany(x => x.Lines)
+                .WithOne(x => x.Budget)
+                .HasForeignKey(x => x.BudgetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.TenantId, x.BudgetId });
+            b.HasIndex(x => new { x.TenantId, x.FiscalYear, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.FiscalYear });
+            b.HasIndex(x => new { x.TenantId, x.Status });
+            b.HasIndex(x => new { x.TenantId, x.IsActive });
+        });
+
+        builder.Entity<BudgetLine>(b =>
+        {
+            b.ToTable("BudgetLines");
+            b.HasKey(x => x.BudgetLineId);
+
+            b.Property(x => x.AllocatedAmount).HasPrecision(18, 2);
+            b.Property(x => x.Notes).HasMaxLength(1000);
+
+            b.HasOne(x => x.Department)
+                .WithMany()
+                .HasForeignKey(x => x.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(x => x.BusinessUnit)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessUnitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(x => x.ExpenseCategory)
+                .WithMany()
+                .HasForeignKey(x => x.ExpenseCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasOne(x => x.GlAccount)
+                .WithMany()
+                .HasForeignKey(x => x.GlAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(x => x.BudgetId);
+            b.HasIndex(x => new { x.BudgetId, x.SequenceOrder }).IsUnique();
         });
 
         // ----- Workflows (tenant-scoped approval chains) -----
