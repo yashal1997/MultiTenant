@@ -10,14 +10,14 @@ public sealed class BudgetLine
     /// <summary>Display order (1-based), derived from request list order.</summary>
     public int SequenceOrder { get; set; }
 
-    public Guid? DepartmentId { get; set; }
-    public Department? Department { get; set; }
+    public Guid DepartmentId { get; set; }
+    public Department Department { get; set; } = default!;
 
-    public Guid? BusinessUnitId { get; set; }
-    public BusinessUnit? BusinessUnit { get; set; }
+    public Guid BusinessUnitId { get; set; }
+    public BusinessUnit BusinessUnit { get; set; } = default!;
 
-    public Guid? ExpenseCategoryId { get; set; }
-    public ExpenseCategory? ExpenseCategory { get; set; }
+    public Guid ExpenseCategoryId { get; set; }
+    public ExpenseCategory ExpenseCategory { get; set; } = default!;
 
     public Guid? GlAccountId { get; set; }
     public GlAccount? GlAccount { get; set; }

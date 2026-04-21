@@ -17,6 +17,12 @@ public sealed class Vendor : ITenantEntity
     /// <summary>Legal entity name when different from <see cref="Name"/>.</summary>
     public string? LegalName { get; set; }
 
+    /// <summary>Client-facing vendor category label.</summary>
+    public string? Category { get; set; }
+
+    /// <summary>Primary descriptive summary used in the vendor screens.</summary>
+    public string? Description { get; set; }
+
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Website { get; set; }
@@ -29,6 +35,12 @@ public sealed class Vendor : ITenantEntity
 
     /// <summary>Net payment terms in days (e.g. 30 for Net 30).</summary>
     public int? PaymentTermsDays { get; set; }
+
+    /// <summary>Preferred payment method label shown in the client UI.</summary>
+    public string? PaymentMethod { get; set; }
+
+    /// <summary>Whether tax applies to this vendor by default.</summary>
+    public bool IsTaxApplicable { get; set; }
 
     public string? AddressLine1 { get; set; }
     public string? AddressLine2 { get; set; }

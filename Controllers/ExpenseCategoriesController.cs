@@ -24,13 +24,26 @@ public sealed class ExpenseCategoriesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateExpenseCategoryRequest request)
     {
         var name = request.Name.Trim();
+        var categoryCode = request.CategoryCode.Trim().ToUpperInvariant();
         var glCode = request.GlCode.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Category name is required." });
+
+        if (string.IsNullOrWhiteSpace(categoryCode))
+            return BadRequest(new { message = "Category code is required." });
 
         var exists = await _db.ExpenseCategories.AsNoTracking()
             .AnyAsync(x => x.Name == name);
 
         if (exists)
             return Conflict(new { message = "Expense category name already exists." });
+
+        var codeExists = await _db.ExpenseCategories.AsNoTracking()
+            .AnyAsync(x => x.CategoryCode == categoryCode);
+
+        if (codeExists)
+            return Conflict(new { message = "Expense category code already exists." });
 
         var gl = await _db.GlAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Code == glCode && x.IsActive);
@@ -43,6 +56,7 @@ public sealed class ExpenseCategoriesController : ControllerBase
             ExpenseCategoryId = Guid.NewGuid(),
             TenantId = gl.TenantId,
             Name = name,
+            CategoryCode = categoryCode,
             Description = request.Description?.Trim(),
             GlAccountId = gl.GlAccountId,
             IsActive = true,
@@ -72,6 +86,7 @@ public sealed class ExpenseCategoriesController : ControllerBase
             var s = search.Trim();
             q = q.Where(x =>
                 x.Name.Contains(s) ||
+                x.CategoryCode.Contains(s) ||
                 x.GlAccount.Code.Contains(s) ||
                 x.GlAccount.Name.Contains(s));
         }
@@ -81,6 +96,7 @@ public sealed class ExpenseCategoriesController : ControllerBase
             .Select(x => new ExpenseCategoryResponse(
                 x.ExpenseCategoryId,
                 x.Name,
+                x.CategoryCode,
                 x.Description,
                 x.IsActive,
                 x.GlAccountId,
@@ -124,13 +140,26 @@ public sealed class ExpenseCategoriesController : ControllerBase
             return NotFound();
 
         var newName = request.Name.Trim();
+        var categoryCode = request.CategoryCode.Trim().ToUpperInvariant();
         var glCode = request.GlCode.Trim();
+
+        if (string.IsNullOrWhiteSpace(newName))
+            return BadRequest(new { message = "Category name is required." });
+
+        if (string.IsNullOrWhiteSpace(categoryCode))
+            return BadRequest(new { message = "Category code is required." });
 
         var exists = await _db.ExpenseCategories.AsNoTracking()
             .AnyAsync(x => x.ExpenseCategoryId != expenseCategoryId && x.Name == newName);
 
         if (exists)
             return Conflict(new { message = "Expense category name already exists." });
+
+        var codeExists = await _db.ExpenseCategories.AsNoTracking()
+            .AnyAsync(x => x.ExpenseCategoryId != expenseCategoryId && x.CategoryCode == categoryCode);
+
+        if (codeExists)
+            return Conflict(new { message = "Expense category code already exists." });
 
         var gl = await _db.GlAccounts.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Code == glCode && x.IsActive);
@@ -139,6 +168,7 @@ public sealed class ExpenseCategoriesController : ControllerBase
             return BadRequest(new { message = "Provided GL code is invalid or inactive." });
 
         entity.Name = newName;
+        entity.CategoryCode = categoryCode;
         entity.Description = request.Description?.Trim();
         entity.GlAccountId = gl.GlAccountId;
         entity.IsActive = request.IsActive;
@@ -170,6 +200,7 @@ public sealed class ExpenseCategoriesController : ControllerBase
     private static ExpenseCategoryResponse ToResponse(ExpenseCategory x, GlAccount gl) => new(
         x.ExpenseCategoryId,
         x.Name,
+        x.CategoryCode,
         x.Description,
         x.IsActive,
         x.GlAccountId,

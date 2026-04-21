@@ -1,4 +1,5 @@
 .vs/
+temp-build/
 bin/
 obj/
 *.user

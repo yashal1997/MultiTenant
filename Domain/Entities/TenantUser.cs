@@ -18,6 +18,8 @@ public sealed class TenantUser
     public BusinessUnit? BusinessUnit { get; set; }
 
     public string? JobTitle { get; set; }
+    public string? EmployeeId { get; set; }
+    public Guid? LineManagerUserId { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

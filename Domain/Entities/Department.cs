@@ -8,7 +8,10 @@ public sealed class Department : ITenantEntity
     public Guid TenantId { get; set; }
 
     public string Name { get; set; } = default!;
+    public string DepartmentCode { get; set; } = default!;
     public string? Description { get; set; }
+    public Guid? HeadOfDepartmentUserId { get; set; }
+    public Guid? PrimaryBusinessUnitId { get; set; }
 
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

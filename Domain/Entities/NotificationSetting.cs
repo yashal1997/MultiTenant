@@ -12,6 +12,8 @@ public sealed class NotificationSetting : ITenantEntity
     public bool EmailExpenseApproved { get; set; } = true;
     public bool EmailExpenseRejected { get; set; } = true;
     public bool EmailPendingApprovalsDigest { get; set; } = true;
+    public bool EmailNotificationsEnabled { get; set; } = true;
+    public bool PushNotificationsEnabled { get; set; } = true;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAtUtc { get; set; }

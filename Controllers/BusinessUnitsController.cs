@@ -33,25 +33,39 @@ public sealed class BusinessUnitsController : ControllerBase
         if (!_tenant.TenantId.HasValue)
             return Unauthorized("Tenant not resolved.");
 
-        var dept = await _db.Departments.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.DepartmentId == request.DepartmentId && x.IsActive);
-
-        if (dept is null)
-            return BadRequest(new { message = "Department not found or inactive." });
-
         var name = request.Name.Trim();
+        var unitCode = request.UnitCode.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Business unit name is required." });
+
+        if (string.IsNullOrWhiteSpace(unitCode))
+            return BadRequest(new { message = "Business unit code is required." });
+
+        var validationError = await ValidateReferencesAsync(request.DepartmentId, request.HeadOfUnitUserId);
+        if (validationError is not null)
+            return BadRequest(new { message = validationError });
+
         var exists = await _db.BusinessUnits.AsNoTracking()
-            .AnyAsync(x => x.DepartmentId == request.DepartmentId && x.Name == name);
+            .AnyAsync(x => x.TenantId == _tenant.TenantId.Value && x.Name == name);
 
         if (exists)
-            return Conflict(new { message = "Business unit name already exists in this department." });
+            return Conflict(new { message = "Business unit name already exists." });
+
+        var codeExists = await _db.BusinessUnits.AsNoTracking()
+            .AnyAsync(x => x.TenantId == _tenant.TenantId.Value && x.UnitCode == unitCode);
+
+        if (codeExists)
+            return Conflict(new { message = "Business unit code already exists." });
 
         var entity = new BusinessUnit
         {
             BusinessUnitId = Guid.NewGuid(),
             TenantId = _tenant.TenantId.Value,
             DepartmentId = request.DepartmentId,
+            HeadOfUnitUserId = request.HeadOfUnitUserId,
             Name = name,
+            UnitCode = unitCode,
             Description = request.Description?.Trim(),
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
@@ -60,8 +74,10 @@ public sealed class BusinessUnitsController : ControllerBase
         _db.BusinessUnits.Add(entity);
         await _db.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetById), new { businessUnitId = entity.BusinessUnitId },
-            await ToResponseAsync(entity));
+        return CreatedAtAction(
+            nameof(GetById),
+            new { businessUnitId = entity.BusinessUnitId },
+            (await BuildResponsesAsync([entity])).Single());
     }
 
     [HttpGet]
@@ -77,7 +93,9 @@ public sealed class BusinessUnitsController : ControllerBase
         var q = _db.BusinessUnits.AsNoTracking().Include(x => x.Department).AsQueryable();
 
         if (departmentId.HasValue)
-            q = q.Where(x => x.DepartmentId == departmentId.Value);
+            q = q.Where(x =>
+                x.DepartmentId == departmentId.Value ||
+                _db.Departments.Any(d => d.DepartmentId == departmentId.Value && d.PrimaryBusinessUnitId == x.BusinessUnitId));
 
         if (isActive.HasValue)
             q = q.Where(x => x.IsActive == isActive.Value);
@@ -85,11 +103,11 @@ public sealed class BusinessUnitsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim();
-            q = q.Where(x => x.Name.Contains(s) || (x.Description != null && x.Description.Contains(s)));
+            q = q.Where(x => x.Name.Contains(s) || x.UnitCode.Contains(s) || (x.Description != null && x.Description.Contains(s)));
         }
 
-        var list = await q.OrderBy(x => x.Department!.Name).ThenBy(x => x.Name).ToListAsync();
-        var rows = list.Select(x => ToResponse(x, x.Department!)).ToList();
+        var list = await q.OrderBy(x => x.Name).ToListAsync();
+        var rows = await BuildResponsesAsync(list);
         return Ok(rows);
     }
 
@@ -105,7 +123,7 @@ public sealed class BusinessUnitsController : ControllerBase
         if (entity is null)
             return NotFound();
 
-        return Ok(ToResponse(entity, entity.Department));
+        return Ok((await BuildResponsesAsync([entity])).Single());
     }
 
     /// <summary>Users assigned to this business unit (business unit contains users).</summary>
@@ -139,7 +157,7 @@ public sealed class BusinessUnitsController : ControllerBase
         var result = memberships
             .Where(m => users.ContainsKey(m.UserId))
             .OrderBy(m => users[m.UserId].Email)
-            .Select(m => TenantUsersController.ToResponse(m, users[m.UserId]))
+            .Select(m => TenantUsersController.ToResponse(m, users[m.UserId], users))
             .ToList();
 
         return Ok(result);
@@ -159,16 +177,40 @@ public sealed class BusinessUnitsController : ControllerBase
             return NotFound();
 
         var name = request.Name.Trim();
+        var unitCode = request.UnitCode.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { message = "Business unit name is required." });
+
+        if (string.IsNullOrWhiteSpace(unitCode))
+            return BadRequest(new { message = "Business unit code is required." });
+
+        var validationError = await ValidateReferencesAsync(request.DepartmentId, request.HeadOfUnitUserId);
+        if (validationError is not null)
+            return BadRequest(new { message = validationError });
+
         var dup = await _db.BusinessUnits.AsNoTracking()
             .AnyAsync(x =>
                 x.BusinessUnitId != businessUnitId &&
-                x.DepartmentId == entity.DepartmentId &&
+                x.TenantId == entity.TenantId &&
                 x.Name == name);
 
         if (dup)
-            return Conflict(new { message = "Business unit name already exists in this department." });
+            return Conflict(new { message = "Business unit name already exists." });
 
+        var codeDup = await _db.BusinessUnits.AsNoTracking()
+            .AnyAsync(x =>
+                x.BusinessUnitId != businessUnitId &&
+                x.TenantId == entity.TenantId &&
+                x.UnitCode == unitCode);
+
+        if (codeDup)
+            return Conflict(new { message = "Business unit code already exists." });
+
+        entity.DepartmentId = request.DepartmentId;
+        entity.HeadOfUnitUserId = request.HeadOfUnitUserId;
         entity.Name = name;
+        entity.UnitCode = unitCode;
         entity.Description = request.Description?.Trim();
         entity.IsActive = request.IsActive;
         entity.UpdatedAtUtc = DateTime.UtcNow;
@@ -177,7 +219,7 @@ public sealed class BusinessUnitsController : ControllerBase
             await ClearTenantUserAssignmentsForBusinessUnitAsync(businessUnitId);
 
         await _db.SaveChangesAsync();
-        return Ok(ToResponse(entity, entity.Department));
+        return Ok((await BuildResponsesAsync([entity])).Single());
     }
 
     [HttpDelete("{businessUnitId:guid}")]
@@ -204,22 +246,90 @@ public sealed class BusinessUnitsController : ControllerBase
             .ExecuteUpdateAsync(s => s.SetProperty(tu => tu.BusinessUnitId, (Guid?)null));
     }
 
-    private async Task<BusinessUnitResponse> ToResponseAsync(BusinessUnit x)
+    private async Task<string?> ValidateReferencesAsync(Guid? departmentId, Guid? headOfUnitUserId)
     {
-        var dept = await _db.Departments.AsNoTracking()
-            .FirstAsync(d => d.DepartmentId == x.DepartmentId);
-        return ToResponse(x, dept);
+        if (!_tenant.TenantId.HasValue)
+            return "Tenant not resolved.";
+
+        var tenantId = _tenant.TenantId.Value;
+
+        if (departmentId.HasValue)
+        {
+            var departmentExists = await _db.Departments.AsNoTracking()
+                .AnyAsync(x => x.TenantId == tenantId && x.DepartmentId == departmentId.Value && x.IsActive);
+
+            if (!departmentExists)
+                return "Department not found or inactive.";
+        }
+
+        if (headOfUnitUserId.HasValue)
+        {
+            var headExists = await _db.TenantUsers.AsNoTracking()
+                .AnyAsync(x => x.TenantId == tenantId && x.UserId == headOfUnitUserId.Value && x.IsActive);
+
+            if (!headExists)
+                return "Head of unit must be an active tenant user.";
+        }
+
+        return null;
     }
 
-    private static BusinessUnitResponse ToResponse(BusinessUnit x, Department dept) => new(
-        x.BusinessUnitId,
-        x.DepartmentId,
-        dept.Name,
-        x.Name,
-        x.Description,
-        x.IsActive,
-        x.CreatedAtUtc,
-        x.UpdatedAtUtc
-    );
+    private async Task<List<BusinessUnitResponse>> BuildResponsesAsync(IEnumerable<BusinessUnit> businessUnits)
+    {
+        var businessUnitList = businessUnits.ToList();
+        var businessUnitIds = businessUnitList.Select(x => x.BusinessUnitId).Distinct().ToList();
+        var departmentIds = businessUnitList.Where(x => x.DepartmentId.HasValue).Select(x => x.DepartmentId!.Value).Distinct().ToList();
+        var headIds = businessUnitList.Where(x => x.HeadOfUnitUserId.HasValue).Select(x => x.HeadOfUnitUserId!.Value).Distinct().ToList();
 
+        var departments = departmentIds.Count == 0
+            ? new Dictionary<Guid, Department>()
+            : await _db.Departments.IgnoreQueryFilters().AsNoTracking()
+                .Where(x => departmentIds.Contains(x.DepartmentId))
+                .ToDictionaryAsync(x => x.DepartmentId);
+
+        var heads = headIds.Count == 0
+            ? new Dictionary<Guid, string?>()
+            : await _db.Users.AsNoTracking()
+                .Where(x => headIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, x => x.FullName ?? x.Email);
+
+        var departmentCounts = await _db.Departments.AsNoTracking()
+            .Where(x => x.PrimaryBusinessUnitId.HasValue && businessUnitIds.Contains(x.PrimaryBusinessUnitId.Value) && x.IsActive)
+            .GroupBy(x => x.PrimaryBusinessUnitId!.Value)
+            .Select(group => new { BusinessUnitId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(x => x.BusinessUnitId, x => x.Count);
+
+        var employeeCounts = await _db.TenantUsers.AsNoTracking()
+            .Where(x => x.BusinessUnitId.HasValue && businessUnitIds.Contains(x.BusinessUnitId.Value) && x.IsActive)
+            .GroupBy(x => x.BusinessUnitId!.Value)
+            .Select(group => new { BusinessUnitId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(x => x.BusinessUnitId, x => x.Count);
+
+        return businessUnitList.Select(unit =>
+        {
+            Department? department = null;
+            if (unit.DepartmentId.HasValue)
+                departments.TryGetValue(unit.DepartmentId.Value, out department);
+
+            heads.TryGetValue(unit.HeadOfUnitUserId ?? Guid.Empty, out var headName);
+            departmentCounts.TryGetValue(unit.BusinessUnitId, out var departmentCount);
+            employeeCounts.TryGetValue(unit.BusinessUnitId, out var employeeCount);
+
+            return new BusinessUnitResponse(
+                unit.BusinessUnitId,
+                unit.DepartmentId,
+                department?.Name,
+                unit.Name,
+                unit.UnitCode,
+                unit.HeadOfUnitUserId,
+                headName,
+                departmentCount,
+                employeeCount,
+                unit.Description,
+                unit.IsActive,
+                unit.CreatedAtUtc,
+                unit.UpdatedAtUtc
+            );
+        }).ToList();
+    }
 }

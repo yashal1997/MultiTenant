@@ -14,6 +14,9 @@ public sealed class Budget : ITenantEntity
     public string Name { get; set; } = default!;
     public string? Description { get; set; }
 
+    public Guid BusinessUnitId { get; set; }
+    public BusinessUnit BusinessUnit { get; set; } = default!;
+
     /// <summary>Fiscal year label (e.g. 2026). Used with <see cref="Name"/> for uniqueness.</summary>
     public int FiscalYear { get; set; }
 

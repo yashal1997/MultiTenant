@@ -17,5 +17,7 @@ namespace MultiTenant.Api.Contracts.Tenant
 
         /// <summary>Per-tenant role label (e.g. job title).</summary>
         public string? JobTitle { get; set; }
+        public string? EmployeeId { get; set; }
+        public Guid? LineManagerUserId { get; set; }
     }
 }

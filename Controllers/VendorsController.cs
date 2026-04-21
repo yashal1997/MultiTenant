@@ -33,14 +33,14 @@ public sealed class VendorsController : ControllerBase
             return Unauthorized("Tenant not resolved.");
 
         var tenantId = _tenant.TenantId.Value;
-        var code = request.Code.Trim();
-        var name = request.Name.Trim();
+        var code = (request.Code ?? string.Empty).Trim();
+        var name = (request.Name ?? string.Empty).Trim();
 
         var fieldError = ValidateCommon(code, name, request.PaymentTermsDays, request.DefaultCurrency);
         if (fieldError is not null)
             return BadRequest(new { message = fieldError });
 
-        if (await _db.Vendors.AsNoTracking().AnyAsync(x => x.Code == code))
+        if (await _db.Vendors.AsNoTracking().AnyAsync(x => x.TenantId == tenantId && x.Code == code))
             return Conflict(new { message = "Vendor code already exists." });
 
         var glError = await ValidateDefaultGlAsync(tenantId, request.DefaultGlAccountId);
@@ -54,12 +54,16 @@ public sealed class VendorsController : ControllerBase
             Code = code,
             Name = name,
             LegalName = request.LegalName?.Trim(),
+            Category = request.Category?.Trim(),
+            Description = request.Description?.Trim(),
             Email = request.Email?.Trim(),
             Phone = request.Phone?.Trim(),
             Website = request.Website?.Trim(),
             TaxIdentifier = request.TaxIdentifier?.Trim(),
             DefaultCurrency = NormalizeCurrency(request.DefaultCurrency),
             PaymentTermsDays = request.PaymentTermsDays,
+            PaymentMethod = request.PaymentMethod?.Trim(),
+            IsTaxApplicable = request.IsTaxApplicable,
             AddressLine1 = request.AddressLine1?.Trim(),
             AddressLine2 = request.AddressLine2?.Trim(),
             City = request.City?.Trim(),
@@ -87,7 +91,11 @@ public sealed class VendorsController : ControllerBase
         if (!_tenant.TenantId.HasValue)
             return Unauthorized("Tenant not resolved.");
 
-        var q = _db.Vendors.AsNoTracking().Include(x => x.DefaultGlAccount).AsQueryable();
+        var tenantId = _tenant.TenantId.Value;
+        var q = _db.Vendors.AsNoTracking()
+            .Include(x => x.DefaultGlAccount)
+            .Where(x => x.TenantId == tenantId)
+            .AsQueryable();
 
         if (isActive.HasValue)
             q = q.Where(x => x.IsActive == isActive.Value);
@@ -111,9 +119,13 @@ public sealed class VendorsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById([FromRoute] Guid vendorId)
     {
+        if (!_tenant.TenantId.HasValue)
+            return Unauthorized("Tenant not resolved.");
+
+        var tenantId = _tenant.TenantId.Value;
         var entity = await _db.Vendors.AsNoTracking()
             .Include(x => x.DefaultGlAccount)
-            .FirstOrDefaultAsync(x => x.VendorId == vendorId);
+            .FirstOrDefaultAsync(x => x.VendorId == vendorId && x.TenantId == tenantId);
 
         if (entity is null)
             return NotFound();
@@ -132,8 +144,8 @@ public sealed class VendorsController : ControllerBase
             return Unauthorized("Tenant not resolved.");
 
         var tenantId = _tenant.TenantId.Value;
-        var code = request.Code.Trim();
-        var name = request.Name.Trim();
+        var code = (request.Code ?? string.Empty).Trim();
+        var name = (request.Name ?? string.Empty).Trim();
 
         var fieldError = ValidateCommon(code, name, request.PaymentTermsDays, request.DefaultCurrency);
         if (fieldError is not null)
@@ -142,8 +154,10 @@ public sealed class VendorsController : ControllerBase
         var entity = await _db.Vendors.FirstOrDefaultAsync(x => x.VendorId == vendorId);
         if (entity is null)
             return NotFound();
+        if (entity.TenantId != tenantId)
+            return NotFound();
 
-        if (await _db.Vendors.AsNoTracking().AnyAsync(x => x.VendorId != vendorId && x.Code == code))
+        if (await _db.Vendors.AsNoTracking().AnyAsync(x => x.TenantId == tenantId && x.VendorId != vendorId && x.Code == code))
             return Conflict(new { message = "Vendor code already exists." });
 
         var glError = await ValidateDefaultGlAsync(tenantId, request.DefaultGlAccountId);
@@ -153,12 +167,16 @@ public sealed class VendorsController : ControllerBase
         entity.Code = code;
         entity.Name = name;
         entity.LegalName = request.LegalName?.Trim();
+        entity.Category = request.Category?.Trim();
+        entity.Description = request.Description?.Trim();
         entity.Email = request.Email?.Trim();
         entity.Phone = request.Phone?.Trim();
         entity.Website = request.Website?.Trim();
         entity.TaxIdentifier = request.TaxIdentifier?.Trim();
         entity.DefaultCurrency = NormalizeCurrency(request.DefaultCurrency);
         entity.PaymentTermsDays = request.PaymentTermsDays;
+        entity.PaymentMethod = request.PaymentMethod?.Trim();
+        entity.IsTaxApplicable = request.IsTaxApplicable;
         entity.AddressLine1 = request.AddressLine1?.Trim();
         entity.AddressLine2 = request.AddressLine2?.Trim();
         entity.City = request.City?.Trim();
@@ -180,8 +198,14 @@ public sealed class VendorsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete([FromRoute] Guid vendorId)
     {
+        if (!_tenant.TenantId.HasValue)
+            return Unauthorized("Tenant not resolved.");
+
+        var tenantId = _tenant.TenantId.Value;
         var entity = await _db.Vendors.FirstOrDefaultAsync(x => x.VendorId == vendorId);
         if (entity is null)
+            return NotFound();
+        if (entity.TenantId != tenantId)
             return NotFound();
 
         entity.IsActive = false;
@@ -203,12 +227,16 @@ public sealed class VendorsController : ControllerBase
         x.Code,
         x.Name,
         x.LegalName,
+        x.Category,
+        x.Description,
         x.Email,
         x.Phone,
         x.Website,
         x.TaxIdentifier,
         x.DefaultCurrency,
         x.PaymentTermsDays,
+        x.PaymentMethod,
+        x.IsTaxApplicable,
         x.AddressLine1,
         x.AddressLine2,
         x.City,

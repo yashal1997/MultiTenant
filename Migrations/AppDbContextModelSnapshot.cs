@@ -125,6 +125,132 @@ namespace MultiTenant.Api.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Budget", b =>
+                {
+                    b.Property<Guid>("BudgetId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BusinessUnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("EndDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FiscalYear")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("StartDateUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("BudgetId");
+
+                    b.HasIndex("BusinessUnitId");
+
+                    b.HasIndex("TenantId", "BudgetId");
+
+                    b.HasIndex("TenantId", "BusinessUnitId");
+
+                    b.HasIndex("TenantId", "FiscalYear");
+
+                    b.HasIndex("TenantId", "IsActive");
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.HasIndex("TenantId", "FiscalYear", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Budgets", (string)null);
+                });
+
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.BudgetLine", b =>
+                {
+                    b.Property<Guid>("BudgetLineId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AllocatedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("BudgetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BusinessUnitId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DepartmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ExpenseCategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("GlAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("SequenceOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("BudgetLineId");
+
+                    b.HasIndex("BudgetId");
+
+                    b.HasIndex("BusinessUnitId");
+
+                    b.HasIndex("DepartmentId");
+
+                    b.HasIndex("ExpenseCategoryId");
+
+                    b.HasIndex("GlAccountId");
+
+                    b.HasIndex("BudgetId", "SequenceOrder")
+                        .IsUnique();
+
+                    b.HasIndex("BudgetId", "DepartmentId", "ExpenseCategoryId")
+                        .IsUnique();
+
+                    b.ToTable("BudgetLines", (string)null);
+                });
+
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.BusinessUnit", b =>
                 {
                     b.Property<Guid>("BusinessUnitId")
@@ -134,12 +260,15 @@ namespace MultiTenant.Api.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("DepartmentId")
+                    b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("HeadOfUnitUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -152,6 +281,11 @@ namespace MultiTenant.Api.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("UnitCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -159,11 +293,16 @@ namespace MultiTenant.Api.Migrations
 
                     b.HasIndex("DepartmentId");
 
+                    b.HasIndex("HeadOfUnitUserId");
+
                     b.HasIndex("TenantId", "BusinessUnitId");
 
                     b.HasIndex("TenantId", "IsActive");
 
-                    b.HasIndex("TenantId", "DepartmentId", "Name")
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "UnitCode")
                         .IsUnique();
 
                     b.ToTable("BusinessUnits", (string)null);
@@ -178,9 +317,17 @@ namespace MultiTenant.Api.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DepartmentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("HeadOfDepartmentUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -190,6 +337,9 @@ namespace MultiTenant.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("PrimaryBusinessUnitId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -197,6 +347,13 @@ namespace MultiTenant.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("DepartmentId");
+
+                    b.HasIndex("HeadOfDepartmentUserId");
+
+                    b.HasIndex("PrimaryBusinessUnitId");
+
+                    b.HasIndex("TenantId", "DepartmentCode")
+                        .IsUnique();
 
                     b.HasIndex("TenantId", "DepartmentId");
 
@@ -213,6 +370,11 @@ namespace MultiTenant.Api.Migrations
                     b.Property<Guid>("ExpenseCategoryId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CategoryCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -241,6 +403,9 @@ namespace MultiTenant.Api.Migrations
                     b.HasKey("ExpenseCategoryId");
 
                     b.HasIndex("GlAccountId");
+
+                    b.HasIndex("TenantId", "CategoryCode")
+                        .IsUnique();
 
                     b.HasIndex("TenantId", "ExpenseCategoryId");
 
@@ -318,7 +483,13 @@ namespace MultiTenant.Api.Migrations
                     b.Property<bool>("EmailExpenseSubmitted")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("EmailPendingApprovalsDigest")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PushNotificationsEnabled")
                         .HasColumnType("bit");
 
                     b.Property<Guid>("TenantId")
@@ -472,12 +643,19 @@ namespace MultiTenant.Api.Migrations
                     b.Property<Guid?>("DepartmentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("EmployeeId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<string>("JobTitle")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("LineManagerUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
@@ -490,6 +668,8 @@ namespace MultiTenant.Api.Migrations
                     b.HasIndex("BusinessUnitId");
 
                     b.HasIndex("DepartmentId");
+
+                    b.HasIndex("LineManagerUserId");
 
                     b.HasIndex("TenantId", "BusinessUnitId");
 
@@ -509,18 +689,109 @@ namespace MultiTenant.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AddressLine1")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AddressLine2")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DefaultCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<Guid?>("DefaultGlAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsTaxApplicable")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("PaymentTermsDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PostalCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("StateRegion")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("TaxIdentifier")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.HasKey("VendorId");
+
+                    b.HasIndex("DefaultGlAccountId");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "IsActive");
 
                     b.HasIndex("TenantId", "Name");
 
@@ -838,15 +1109,85 @@ namespace MultiTenant.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Budget", b =>
+                {
+                    b.HasOne("MultiTenant.Api.Domain.Entities.BusinessUnit", "BusinessUnit")
+                        .WithMany()
+                        .HasForeignKey("BusinessUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BusinessUnit");
+                });
+
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.BudgetLine", b =>
+                {
+                    b.HasOne("MultiTenant.Api.Domain.Entities.Budget", "Budget")
+                        .WithMany("Lines")
+                        .HasForeignKey("BudgetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MultiTenant.Api.Domain.Entities.BusinessUnit", "BusinessUnit")
+                        .WithMany()
+                        .HasForeignKey("BusinessUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MultiTenant.Api.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MultiTenant.Api.Domain.Entities.ExpenseCategory", "ExpenseCategory")
+                        .WithMany()
+                        .HasForeignKey("ExpenseCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MultiTenant.Api.Domain.Entities.GlAccount", "GlAccount")
+                        .WithMany()
+                        .HasForeignKey("GlAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Budget");
+
+                    b.Navigation("BusinessUnit");
+
+                    b.Navigation("Department");
+
+                    b.Navigation("ExpenseCategory");
+
+                    b.Navigation("GlAccount");
+                });
+
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.BusinessUnit", b =>
                 {
                     b.HasOne("MultiTenant.Api.Domain.Entities.Department", "Department")
                         .WithMany("BusinessUnits")
                         .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("HeadOfUnitUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Department", b =>
+                {
+                    b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("HeadOfDepartmentUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MultiTenant.Api.Domain.Entities.BusinessUnit", null)
+                        .WithMany()
+                        .HasForeignKey("PrimaryBusinessUnitId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.ExpenseCategory", b =>
@@ -890,9 +1231,24 @@ namespace MultiTenant.Api.Migrations
                         .HasForeignKey("DepartmentId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("MultiTenant.Api.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("LineManagerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("BusinessUnit");
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Vendor", b =>
+                {
+                    b.HasOne("MultiTenant.Api.Domain.Entities.GlAccount", "DefaultGlAccount")
+                        .WithMany()
+                        .HasForeignKey("DefaultGlAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("DefaultGlAccount");
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.WorkflowBusinessUnitScope", b =>
@@ -967,6 +1323,11 @@ namespace MultiTenant.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Workflow");
+                });
+
+            modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Budget", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("MultiTenant.Api.Domain.Entities.Department", b =>

@@ -38,6 +38,19 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 // ✅ SERVICES (ALL BEFORE Build)
+builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? ["http://localhost:8080"];
+
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -109,6 +122,8 @@ builder.Services.AddScoped<TenantResolverMiddleware>();
 // ✅ BUILD (after all AddX)
 var app = builder.Build();
 
+await SeedPlatformAdminAsync(app);
+
 // ✅ MIDDLEWARE (after Build)
 if (app.Environment.IsDevelopment())
 {
@@ -117,6 +132,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseMiddleware<TenantResolverMiddleware>();
@@ -125,3 +141,57 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static async Task SeedPlatformAdminAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    const string adminEmail = "admin@expertlinx.com";
+    const string adminPassword = "Admin@123";
+
+    var user = await userManager.Users.FirstOrDefaultAsync(x => x.Email == adminEmail);
+
+    if (user is null)
+    {
+        user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = adminEmail,
+            Email = adminEmail,
+            FullName = "Platform Admin",
+            EmailConfirmed = true,
+            IsPlatformAdmin = true
+        };
+
+        var createResult = await userManager.CreateAsync(user, adminPassword);
+        if (!createResult.Succeeded)
+        {
+            var errors = string.Join("; ", createResult.Errors.Select(x => x.Description));
+            throw new InvalidOperationException($"Failed to seed platform admin user: {errors}");
+        }
+
+        return;
+    }
+
+    user.UserName = adminEmail;
+    user.Email = adminEmail;
+    user.FullName ??= "Platform Admin";
+    user.EmailConfirmed = true;
+    user.IsPlatformAdmin = true;
+
+    var updateResult = await userManager.UpdateAsync(user);
+    if (!updateResult.Succeeded)
+    {
+        var errors = string.Join("; ", updateResult.Errors.Select(x => x.Description));
+        throw new InvalidOperationException($"Failed to update seeded platform admin user: {errors}");
+    }
+
+    var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+    var resetResult = await userManager.ResetPasswordAsync(user, resetToken, adminPassword);
+    if (!resetResult.Succeeded)
+    {
+        var errors = string.Join("; ", resetResult.Errors.Select(x => x.Description));
+        throw new InvalidOperationException($"Failed to reset seeded platform admin password: {errors}");
+    }
+}

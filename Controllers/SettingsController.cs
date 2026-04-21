@@ -92,7 +92,7 @@ public sealed class SettingsController : ControllerBase
     private async Task<TenantGeneralSetting> GetOrCreateGeneralSettingsAsync(Guid tenantId)
     {
         var settings = await _db.TenantGeneralSettings
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId);
 
         if (settings is not null)
             return settings;

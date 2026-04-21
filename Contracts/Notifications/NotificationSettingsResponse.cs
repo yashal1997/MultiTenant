@@ -6,6 +6,8 @@ public sealed record NotificationSettingsResponse(
     bool EmailExpenseApproved,
     bool EmailExpenseRejected,
     bool EmailPendingApprovalsDigest,
+    bool EmailNotificationsEnabled,
+    bool PushNotificationsEnabled,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc
 );

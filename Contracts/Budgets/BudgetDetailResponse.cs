@@ -1,20 +1,19 @@
-using MultiTenant.Api.Domain.Entities;
-
 namespace MultiTenant.Api.Contracts.Budgets;
 
 public sealed record BudgetDetailResponse(
     Guid BudgetId,
     string Name,
     string? Description,
+    Guid BusinessUnitId,
+    string BusinessUnitName,
     int FiscalYear,
     DateTime StartDateUtc,
     DateTime EndDateUtc,
-    BudgetStatus Status,
-    string CurrencyCode,
-    decimal? TotalAmount,
     decimal AllocatedTotal,
+    decimal SpentTotal,
+    decimal RemainingTotal,
     bool IsActive,
-    IReadOnlyList<BudgetLineResponse> Lines,
+    IReadOnlyList<BudgetDepartmentAllocationResponse> DepartmentAllocations,
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc
 );

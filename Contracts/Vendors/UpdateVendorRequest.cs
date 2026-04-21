@@ -5,12 +5,16 @@ public sealed class UpdateVendorRequest
     public string Code { get; set; } = default!;
     public string Name { get; set; } = default!;
     public string? LegalName { get; set; }
+    public string? Category { get; set; }
+    public string? Description { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Website { get; set; }
     public string? TaxIdentifier { get; set; }
     public string? DefaultCurrency { get; set; }
     public int? PaymentTermsDays { get; set; }
+    public string? PaymentMethod { get; set; }
+    public bool IsTaxApplicable { get; set; }
     public string? AddressLine1 { get; set; }
     public string? AddressLine2 { get; set; }
     public string? City { get; set; }

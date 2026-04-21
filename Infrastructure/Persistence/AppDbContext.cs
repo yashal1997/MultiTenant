@@ -67,6 +67,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasIndex(x => new { x.TenantId, x.BusinessUnitId });
 
             b.Property(x => x.JobTitle).HasMaxLength(200);
+            b.Property(x => x.EmployeeId).HasMaxLength(100);
 
             b.HasOne(x => x.Department)
                 .WithMany()
@@ -76,6 +77,11 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasOne(x => x.BusinessUnit)
                 .WithMany()
                 .HasForeignKey(x => x.BusinessUnitId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.LineManagerUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -88,11 +94,14 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.Property(x => x.Code).HasMaxLength(50).IsRequired();
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
             b.Property(x => x.LegalName).HasMaxLength(200);
+            b.Property(x => x.Category).HasMaxLength(100);
+            b.Property(x => x.Description).HasMaxLength(1000);
             b.Property(x => x.Email).HasMaxLength(320);
             b.Property(x => x.Phone).HasMaxLength(50);
             b.Property(x => x.Website).HasMaxLength(500);
             b.Property(x => x.TaxIdentifier).HasMaxLength(80);
             b.Property(x => x.DefaultCurrency).HasMaxLength(3);
+            b.Property(x => x.PaymentMethod).HasMaxLength(100);
             b.Property(x => x.AddressLine1).HasMaxLength(200);
             b.Property(x => x.AddressLine2).HasMaxLength(200);
             b.Property(x => x.City).HasMaxLength(120);
@@ -135,6 +144,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasKey(x => x.ExpenseCategoryId);
 
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.CategoryCode).HasMaxLength(50).IsRequired();
             b.Property(x => x.Description).HasMaxLength(500);
 
             b.HasOne(x => x.GlAccount)
@@ -144,6 +154,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
 
             b.HasIndex(x => new { x.TenantId, x.ExpenseCategoryId });
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.CategoryCode }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.IsActive });
             b.HasIndex(x => new { x.TenantId, x.GlAccountId });
         });
@@ -155,10 +166,22 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasKey(x => x.DepartmentId);
 
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.DepartmentCode).HasMaxLength(50).IsRequired();
             b.Property(x => x.Description).HasMaxLength(500);
+
+            b.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.HeadOfDepartmentUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne<BusinessUnit>()
+                .WithMany()
+                .HasForeignKey(x => x.PrimaryBusinessUnitId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             b.HasIndex(x => new { x.TenantId, x.DepartmentId });
             b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.DepartmentCode }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.IsActive });
         });
 
@@ -169,15 +192,22 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasKey(x => x.BusinessUnitId);
 
             b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.Property(x => x.UnitCode).HasMaxLength(50).IsRequired();
             b.Property(x => x.Description).HasMaxLength(500);
 
             b.HasOne(x => x.Department)
                 .WithMany(x => x.BusinessUnits)
                 .HasForeignKey(x => x.DepartmentId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.HeadOfUnitUserId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             b.HasIndex(x => new { x.TenantId, x.BusinessUnitId });
-            b.HasIndex(x => new { x.TenantId, x.DepartmentId, x.Name }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.UnitCode }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Name }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.IsActive });
         });
 
@@ -193,11 +223,17 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             b.Property(x => x.TotalAmount).HasPrecision(18, 2);
 
+            b.HasOne(x => x.BusinessUnit)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessUnitId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             b.HasMany(x => x.Lines)
                 .WithOne(x => x.Budget)
                 .HasForeignKey(x => x.BudgetId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            b.HasIndex(x => new { x.TenantId, x.BusinessUnitId });
             b.HasIndex(x => new { x.TenantId, x.BudgetId });
             b.HasIndex(x => new { x.TenantId, x.FiscalYear, x.Name }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.FiscalYear });
@@ -235,6 +271,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
 
             b.HasIndex(x => x.BudgetId);
             b.HasIndex(x => new { x.BudgetId, x.SequenceOrder }).IsUnique();
+            b.HasIndex(x => new { x.BudgetId, x.DepartmentId, x.ExpenseCategoryId }).IsUnique();
         });
 
         // ----- Workflows (tenant-scoped approval chains) -----

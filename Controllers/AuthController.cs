@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -127,7 +126,15 @@ public sealed class AuthController : ControllerBase
 
         var signIn = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (!signIn.Succeeded)
-            return Unauthorized("Invalid credentials.");
+        {
+            var reason = signIn.IsLockedOut
+                ? "User is locked out."
+                : signIn.IsNotAllowed
+                    ? "User is not allowed to sign in."
+                    : "Password validation failed.";
+
+            return Unauthorized(reason);
+        }
 
         var tenants = await GetUserTenants(user.Id);
 

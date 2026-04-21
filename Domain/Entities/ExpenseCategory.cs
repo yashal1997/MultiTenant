@@ -8,6 +8,7 @@ public sealed class ExpenseCategory : ITenantEntity
     public Guid TenantId { get; set; }
 
     public string Name { get; set; } = default!;
+    public string CategoryCode { get; set; } = default!;
     public string? Description { get; set; }
 
     public Guid GlAccountId { get; set; }

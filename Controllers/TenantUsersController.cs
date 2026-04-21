@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MultiTenant.Api.Application.Interfaces;
+using MultiTenant.Api.Contracts.Notifications;
 using MultiTenant.Api.Contracts.Tenant;
 using MultiTenant.Api.Domain.Entities;
 using MultiTenant.Api.Identity;
@@ -48,9 +49,15 @@ public sealed class TenantUsersController : ControllerBase
 
         if (departmentId.HasValue)
         {
+            var scopedBusinessUnitIds = await _db.Departments.AsNoTracking()
+                .Where(d => d.DepartmentId == departmentId.Value && d.PrimaryBusinessUnitId.HasValue)
+                .Select(d => d.PrimaryBusinessUnitId!.Value)
+                .ToListAsync();
+
             q = q.Where(tu =>
                 tu.DepartmentId == departmentId.Value ||
-                (tu.BusinessUnit != null && tu.BusinessUnit.DepartmentId == departmentId.Value));
+                (tu.BusinessUnit != null && tu.BusinessUnit.DepartmentId == departmentId.Value) ||
+                (tu.BusinessUnitId.HasValue && scopedBusinessUnitIds.Contains(tu.BusinessUnitId.Value)));
         }
 
         if (businessUnitId.HasValue)
@@ -66,7 +73,7 @@ public sealed class TenantUsersController : ControllerBase
         var result = memberships
             .Where(m => users.ContainsKey(m.UserId))
             .OrderBy(m => users[m.UserId].Email)
-            .Select(m => ToResponse(m, users[m.UserId]))
+            .Select(m => ToResponse(m, users[m.UserId], users))
             .ToList();
 
         return Ok(result);
@@ -95,7 +102,8 @@ public sealed class TenantUsersController : ControllerBase
         if (u is null)
             return NotFound();
 
-        return Ok(ToResponse(tu, u));
+        var users = await LoadUsersByIdsAsync(new Guid?[] { userId, tu.LineManagerUserId }.Where(x => x.HasValue).Select(x => x!.Value));
+        return Ok(ToResponse(tu, u, users));
     }
 
     [HttpPost]
@@ -110,6 +118,10 @@ public sealed class TenantUsersController : ControllerBase
         var org = await ResolveOrgAsync(request.DepartmentId, request.BusinessUnitId);
         if (!org.ok)
             return BadRequest(new { message = org.error });
+
+        var managerCheck = await ValidateLineManagerAsync(tenantId, request.LineManagerUserId, null);
+        if (!managerCheck.ok)
+            return BadRequest(new { message = managerCheck.error });
 
         var user = new ApplicationUser
         {
@@ -134,6 +146,8 @@ public sealed class TenantUsersController : ControllerBase
             DepartmentId = org.deptId,
             BusinessUnitId = org.buId,
             JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? null : request.JobTitle.Trim(),
+            EmployeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? null : request.EmployeeId.Trim(),
+            LineManagerUserId = request.LineManagerUserId,
             CreatedAtUtc = DateTime.UtcNow
         });
 
@@ -179,6 +193,18 @@ public sealed class TenantUsersController : ControllerBase
         if (request.JobTitle != null)
             tu.JobTitle = string.IsNullOrWhiteSpace(request.JobTitle) ? null : request.JobTitle.Trim();
 
+        if (request.EmployeeId != null)
+            tu.EmployeeId = string.IsNullOrWhiteSpace(request.EmployeeId) ? null : request.EmployeeId.Trim();
+
+        if (request.LineManagerUserId != tu.LineManagerUserId)
+        {
+            var managerCheck = await ValidateLineManagerAsync(tenantId, request.LineManagerUserId, userId);
+            if (!managerCheck.ok)
+                return BadRequest(new { message = managerCheck.error });
+
+            tu.LineManagerUserId = request.LineManagerUserId;
+        }
+
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
             return BadRequest(updateResult.Errors.Select(e => e.Description));
@@ -209,6 +235,51 @@ public sealed class TenantUsersController : ControllerBase
         return Ok(await BuildResponseAsync(userId, tenantId));
     }
 
+    [HttpGet("{userId:guid}/preferences")]
+    [ProducesResponseType(typeof(TenantUserPreferencesResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPreferences([FromRoute] Guid userId)
+    {
+        if (!_tenant.TenantId.HasValue)
+            return Unauthorized("Tenant not resolved.");
+
+        var tenantId = _tenant.TenantId.Value;
+
+        var exists = await _db.TenantUsers.AsNoTracking()
+            .AnyAsync(x => x.TenantId == tenantId && x.UserId == userId);
+
+        if (!exists)
+            return NotFound();
+
+        var settings = await GetOrCreateUserPreferencesAsync(tenantId, userId);
+        return Ok(ToPreferencesResponse(settings));
+    }
+
+    [HttpPut("{userId:guid}/preferences")]
+    [ProducesResponseType(typeof(TenantUserPreferencesResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdatePreferences([FromRoute] Guid userId, [FromBody] UpdateTenantUserPreferencesRequest request)
+    {
+        if (!_tenant.TenantId.HasValue)
+            return Unauthorized("Tenant not resolved.");
+
+        var tenantId = _tenant.TenantId.Value;
+
+        var exists = await _db.TenantUsers.AsNoTracking()
+            .AnyAsync(x => x.TenantId == tenantId && x.UserId == userId);
+
+        if (!exists)
+            return NotFound();
+
+        var settings = await GetOrCreateUserPreferencesAsync(tenantId, userId);
+        settings.EmailNotificationsEnabled = request.EmailNotificationsEnabled;
+        settings.PushNotificationsEnabled = request.PushNotificationsEnabled;
+        settings.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return Ok(ToPreferencesResponse(settings));
+    }
+
     [HttpDelete("{userId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -236,21 +307,95 @@ public sealed class TenantUsersController : ControllerBase
             .ThenInclude(bu => bu.Department)
             .FirstAsync(x => x.TenantId == tenantId && x.UserId == userId);
         var u = await _db.Users.AsNoTracking().FirstAsync(x => x.Id == userId);
-        return ToResponse(tu, u);
+        var users = await LoadUsersByIdsAsync(new Guid?[] { userId, tu.LineManagerUserId }.Where(x => x.HasValue).Select(x => x!.Value));
+        return ToResponse(tu, u, users);
     }
 
-    internal static TenantUserResponse ToResponse(TenantUser m, ApplicationUser u) => new()
+    internal static TenantUserResponse ToResponse(
+        TenantUser m,
+        ApplicationUser u,
+        IReadOnlyDictionary<Guid, ApplicationUser> users) => new()
     {
         UserId = u.Id,
         Email = u.Email ?? "",
         FullName = u.FullName,
         PhoneNumber = u.PhoneNumber,
         JobTitle = m.JobTitle,
+        EmployeeId = m.EmployeeId,
+        LineManagerUserId = m.LineManagerUserId,
+        LineManagerName = m.LineManagerUserId.HasValue && users.TryGetValue(m.LineManagerUserId.Value, out var lineManager)
+            ? lineManager.FullName ?? lineManager.Email
+            : null,
         IsActive = m.IsActive,
         DepartmentId = m.DepartmentId ?? m.BusinessUnit?.DepartmentId,
         DepartmentName = m.Department?.Name ?? m.BusinessUnit?.Department?.Name,
         BusinessUnitId = m.BusinessUnitId,
         BusinessUnitName = m.BusinessUnit?.Name
+    };
+
+    private async Task<Dictionary<Guid, ApplicationUser>> LoadUsersByIdsAsync(IEnumerable<Guid> userIds)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (!ids.Count.Equals(0))
+        {
+            return await _db.Users.AsNoTracking()
+                .Where(u => ids.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id);
+        }
+
+        return new Dictionary<Guid, ApplicationUser>();
+    }
+
+    private async Task<(bool ok, string? error)> ValidateLineManagerAsync(Guid tenantId, Guid? lineManagerUserId, Guid? targetUserId)
+    {
+        if (!lineManagerUserId.HasValue)
+            return (true, null);
+
+        if (targetUserId.HasValue && lineManagerUserId.Value == targetUserId.Value)
+            return (false, "User cannot be their own line manager.");
+
+        var managerExists = await _db.TenantUsers.AsNoTracking()
+            .AnyAsync(x => x.TenantId == tenantId && x.UserId == lineManagerUserId.Value && x.IsActive);
+
+        return managerExists
+            ? (true, null)
+            : (false, "Line manager must be an active member of this tenant.");
+    }
+
+    private async Task<NotificationSetting> GetOrCreateUserPreferencesAsync(Guid tenantId, Guid userId)
+    {
+        var settings = await _db.NotificationSettings
+            .FirstOrDefaultAsync(x => x.TenantId == tenantId && x.UserId == userId);
+
+        if (settings is not null)
+            return settings;
+
+        settings = new NotificationSetting
+        {
+            NotificationSettingId = Guid.NewGuid(),
+            TenantId = tenantId,
+            UserId = userId,
+            EmailExpenseSubmitted = true,
+            EmailExpenseApproved = true,
+            EmailExpenseRejected = true,
+            EmailPendingApprovalsDigest = true,
+            EmailNotificationsEnabled = true,
+            PushNotificationsEnabled = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        _db.NotificationSettings.Add(settings);
+        await _db.SaveChangesAsync();
+        return settings;
+    }
+
+    private static TenantUserPreferencesResponse ToPreferencesResponse(NotificationSetting settings) => new()
+    {
+        NotificationSettingId = settings.NotificationSettingId,
+        EmailNotificationsEnabled = settings.EmailNotificationsEnabled,
+        PushNotificationsEnabled = settings.PushNotificationsEnabled,
+        CreatedAtUtc = settings.CreatedAtUtc,
+        UpdatedAtUtc = settings.UpdatedAtUtc
     };
 
     private async Task<(bool ok, Guid? deptId, Guid? buId, string? error)> ResolveOrgAsync(
@@ -268,10 +413,22 @@ public sealed class TenantUsersController : ControllerBase
             if (bu is null)
                 return (false, null, null, "Business unit not found or inactive.");
 
-            if (departmentId.HasValue && departmentId.Value != bu.DepartmentId)
-                return (false, null, null, "Business unit does not belong to the selected department.");
+            if (departmentId.HasValue)
+            {
+                var departmentMatches = bu.DepartmentId == departmentId.Value ||
+                    await _db.Departments.AsNoTracking()
+                        .AnyAsync(x => x.DepartmentId == departmentId.Value && x.PrimaryBusinessUnitId == businessUnitId.Value && x.IsActive);
 
-            return (true, bu.DepartmentId, businessUnitId, null);
+                if (!departmentMatches)
+                    return (false, null, null, "Business unit does not belong to the selected department.");
+
+                return (true, departmentId.Value, businessUnitId, null);
+            }
+
+            if (bu.DepartmentId.HasValue)
+                return (true, bu.DepartmentId.Value, businessUnitId, null);
+
+            return (false, null, null, "Department is required for the selected business unit.");
         }
 
         var dept = await _db.Departments.AsNoTracking()

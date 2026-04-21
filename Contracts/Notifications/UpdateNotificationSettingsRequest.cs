@@ -4,5 +4,7 @@ public sealed record UpdateNotificationSettingsRequest(
     bool EmailExpenseSubmitted,
     bool EmailExpenseApproved,
     bool EmailExpenseRejected,
-    bool EmailPendingApprovalsDigest
+    bool EmailPendingApprovalsDigest,
+    bool? EmailNotificationsEnabled,
+    bool? PushNotificationsEnabled
 );

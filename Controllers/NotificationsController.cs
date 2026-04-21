@@ -48,6 +48,10 @@ public sealed class NotificationsController : ControllerBase
         settings.EmailExpenseApproved = request.EmailExpenseApproved;
         settings.EmailExpenseRejected = request.EmailExpenseRejected;
         settings.EmailPendingApprovalsDigest = request.EmailPendingApprovalsDigest;
+        if (request.EmailNotificationsEnabled.HasValue)
+            settings.EmailNotificationsEnabled = request.EmailNotificationsEnabled.Value;
+        if (request.PushNotificationsEnabled.HasValue)
+            settings.PushNotificationsEnabled = request.PushNotificationsEnabled.Value;
         settings.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -57,7 +61,7 @@ public sealed class NotificationsController : ControllerBase
     private async Task<NotificationSetting> GetOrCreateSettingsAsync(Guid userId)
     {
         var settings = await _db.NotificationSettings
-            .FirstOrDefaultAsync(x => x.UserId == userId);
+            .FirstOrDefaultAsync(x => x.TenantId == _tenant.TenantId!.Value && x.UserId == userId);
 
         if (settings is not null)
             return settings;
@@ -71,6 +75,8 @@ public sealed class NotificationsController : ControllerBase
             EmailExpenseApproved = true,
             EmailExpenseRejected = true,
             EmailPendingApprovalsDigest = true,
+            EmailNotificationsEnabled = true,
+            PushNotificationsEnabled = true,
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -91,6 +97,8 @@ public sealed class NotificationsController : ControllerBase
         x.EmailExpenseApproved,
         x.EmailExpenseRejected,
         x.EmailPendingApprovalsDigest,
+        x.EmailNotificationsEnabled,
+        x.PushNotificationsEnabled,
         x.CreatedAtUtc,
         x.UpdatedAtUtc
     );

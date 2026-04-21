@@ -6,11 +6,13 @@ public sealed class BusinessUnit : ITenantEntity
 {
     public Guid BusinessUnitId { get; set; }
     public Guid TenantId { get; set; }
-    public Guid DepartmentId { get; set; }
+    public Guid? DepartmentId { get; set; }
+    public Guid? HeadOfUnitUserId { get; set; }
 
-    public Department Department { get; set; } = default!;
+    public Department? Department { get; set; }
 
     public string Name { get; set; } = default!;
+    public string UnitCode { get; set; } = default!;
     public string? Description { get; set; }
 
     public bool IsActive { get; set; } = true;

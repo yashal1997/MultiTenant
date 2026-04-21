@@ -6,6 +6,8 @@ public sealed class UpdateTenantUserRequest
     public string? FullName { get; set; }
     public string? PhoneNumber { get; set; }
     public string? JobTitle { get; set; }
+    public string? EmployeeId { get; set; }
+    public Guid? LineManagerUserId { get; set; }
 
     /// <summary>
     /// When true, <see cref="DepartmentId"/> and <see cref="BusinessUnitId"/> are applied
