@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MultiTenant.Api.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using MultiTenant.Api.Infrastructure.Persistence;
 namespace MultiTenant.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260421220502_AddExpenseRequests")]
+    partial class AddExpenseRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -458,22 +461,8 @@ namespace MultiTenant.Api.Migrations
                     b.Property<Guid?>("ExpenseCategoryId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("ExpenseType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<string>("FundingType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
-
-                    b.Property<string>("ProjectId")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("RejectedAtUtc")
                         .HasColumnType("datetime2");

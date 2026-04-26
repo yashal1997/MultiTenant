@@ -33,6 +33,10 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
     public DbSet<WorkflowExpenseCategoryScope> WorkflowExpenseCategoryScopes => Set<WorkflowExpenseCategoryScope>();
     public DbSet<Budget> Budgets => Set<Budget>();
     public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+    public DbSet<ExpenseRequest> ExpenseRequests => Set<ExpenseRequest>();
+    public DbSet<ExpenseRequestLine> ExpenseRequestLines => Set<ExpenseRequestLine>();
+    public DbSet<ExpenseRequestApproval> ExpenseRequestApprovals => Set<ExpenseRequestApproval>();
+    public DbSet<ExpenseRequestSequence> ExpenseRequestSequences => Set<ExpenseRequestSequence>();
     public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
     public DbSet<TenantGeneralSetting> TenantGeneralSettings => Set<TenantGeneralSetting>();
 
@@ -272,6 +276,136 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser, Applicatio
             b.HasIndex(x => x.BudgetId);
             b.HasIndex(x => new { x.BudgetId, x.SequenceOrder }).IsUnique();
             b.HasIndex(x => new { x.BudgetId, x.DepartmentId, x.ExpenseCategoryId }).IsUnique();
+        });
+
+        // ----- Expense requests (tenant-scoped) -----
+        builder.Entity<ExpenseRequest>(b =>
+        {
+            b.ToTable("ExpenseRequests");
+            b.HasKey(x => x.ExpenseRequestId);
+
+            b.Property(x => x.RequestNumber).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Title).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Description).HasMaxLength(4000);
+            b.Property(x => x.ExpenseType).HasConversion<string>().HasMaxLength(40);
+            b.Property(x => x.ProjectId).HasMaxLength(200);
+            b.Property(x => x.FundingType).HasConversion<string>().HasMaxLength(40);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
+            b.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            b.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
+
+            b.HasOne(x => x.Vendor)
+                .WithMany()
+                .HasForeignKey(x => x.VendorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.ExpenseCategory)
+                .WithMany()
+                .HasForeignKey(x => x.ExpenseCategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.Department)
+                .WithMany()
+                .HasForeignKey(x => x.DepartmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.BusinessUnit)
+                .WithMany()
+                .HasForeignKey(x => x.BusinessUnitId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.Budget)
+                .WithMany()
+                .HasForeignKey(x => x.BudgetId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.Workflow)
+                .WithMany()
+                .HasForeignKey(x => x.WorkflowId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasMany(x => x.Lines)
+                .WithOne(x => x.ExpenseRequest)
+                .HasForeignKey(x => x.ExpenseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasMany(x => x.Approvals)
+                .WithOne(x => x.ExpenseRequest)
+                .HasForeignKey(x => x.ExpenseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.TenantId, x.ExpenseRequestId });
+            b.HasIndex(x => new { x.TenantId, x.RequestNumber }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Status });
+            b.HasIndex(x => new { x.TenantId, x.SubmittedByUserId });
+            b.HasIndex(x => new { x.TenantId, x.IsActive });
+        });
+
+        builder.Entity<ExpenseRequestLine>(b =>
+        {
+            b.ToTable("ExpenseRequestLines");
+            b.HasKey(x => x.ExpenseRequestLineId);
+
+            b.Property(x => x.Description).HasMaxLength(500).IsRequired();
+            b.Property(x => x.Amount).HasPrecision(18, 2);
+
+            b.HasOne(x => x.ExpenseRequest)
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.ExpenseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne(x => x.LineExpenseCategory)
+                .WithMany()
+                .HasForeignKey(x => x.ExpenseCategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.GlAccount)
+                .WithMany()
+                .HasForeignKey(x => x.GlAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasOne(x => x.LineVendor)
+                .WithMany()
+                .HasForeignKey(x => x.VendorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(x => new { x.TenantId, x.ExpenseRequestId });
+            b.HasIndex(x => new { x.ExpenseRequestId, x.SequenceOrder }).IsUnique();
+        });
+
+        builder.Entity<ExpenseRequestApproval>(b =>
+        {
+            b.ToTable("ExpenseRequestApprovals");
+            b.HasKey(x => x.ExpenseRequestApprovalId);
+
+            b.Property(x => x.StepStatus).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Comment).HasMaxLength(2000);
+
+            b.HasOne(x => x.ExpenseRequest)
+                .WithMany(x => x.Approvals)
+                .HasForeignKey(x => x.ExpenseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.ApproverUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            b.HasIndex(x => new { x.TenantId, x.ExpenseRequestId });
+            b.HasIndex(x => new { x.ExpenseRequestId, x.StepSequence }).IsUnique();
+        });
+
+        builder.Entity<ExpenseRequestSequence>(b =>
+        {
+            b.ToTable("ExpenseRequestSequences");
+            b.HasKey(x => x.ExpenseRequestSequenceId);
+
+            b.HasIndex(x => new { x.TenantId, x.Year }).IsUnique();
         });
 
         // ----- Workflows (tenant-scoped approval chains) -----

@@ -1,0 +1,40 @@
+using MultiTenant.Api.Domain.Entities;
+
+namespace MultiTenant.Api.Contracts.ExpenseRequests;
+
+public sealed record ExpenseRequestDetailResponse(
+    Guid ExpenseRequestId,
+    string RequestNumber,
+    string Title,
+    string? Description,
+    ExpenseRequestExpenseType ExpenseType,
+    string? ProjectId,
+    ExpenseRequestFundingType FundingType,
+    ExpenseRequestStatus Status,
+    decimal TotalAmount,
+    string CurrencyCode,
+    Guid SubmittedByUserId,
+    string? SubmitterEmail,
+    string? SubmitterFullName,
+    Guid? VendorId,
+    string? VendorName,
+    Guid? ExpenseCategoryId,
+    string? ExpenseCategoryName,
+    Guid? DepartmentId,
+    string? DepartmentName,
+    Guid? BusinessUnitId,
+    string? BusinessUnitName,
+    Guid? BudgetId,
+    string? BudgetName,
+    Guid? WorkflowId,
+    string? WorkflowName,
+    int? CurrentApprovalStepSequence,
+    DateTime? SubmittedAtUtc,
+    DateTime? ApprovedAtUtc,
+    DateTime? RejectedAtUtc,
+    DateTime? CompletedAtUtc,
+    IReadOnlyList<ExpenseRequestLineResponse> Lines,
+    IReadOnlyList<ExpenseRequestApprovalResponse> Approvals,
+    DateTime CreatedAtUtc,
+    DateTime? UpdatedAtUtc
+);
