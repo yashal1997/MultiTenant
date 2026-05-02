@@ -38,7 +38,6 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 // ✅ SERVICES (ALL BEFORE Build)
-builder.Services.AddControllers();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -52,7 +51,15 @@ builder.Services.AddCors(options =>
     });
 });
 builder.Services.AddControllers()
-    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+    throw new InvalidOperationException("Configuration Jwt:Key is missing or empty. Add Jwt settings to appsettings.json.");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -103,7 +110,7 @@ builder.Services.AddAuthentication(options =>
           ValidAudience = jwt["Audience"],
 
           ValidateIssuerSigningKey = true,
-          IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!)),
+          IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
 
           ValidateLifetime = true,
           ClockSkew = TimeSpan.FromSeconds(30)
