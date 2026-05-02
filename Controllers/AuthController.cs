@@ -120,11 +120,24 @@ public sealed class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
-        var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        if (request is null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrEmpty(request.Password))
+            return BadRequest(new { message = "Email and password are required." });
+
+        var loginId = request.Email.Trim();
+        var password = request.Password;
+
+        var normEmail = _userManager.NormalizeEmail(loginId);
+        var normUserName = _userManager.NormalizeName(loginId);
+
+        var user = await _userManager.Users
+            .FirstOrDefaultAsync(u =>
+                (normEmail != null && u.NormalizedEmail == normEmail) ||
+                (normUserName != null && u.NormalizedUserName == normUserName));
+
         if (user is null)
             return Unauthorized("Invalid credentials.");
 
-        var signIn = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+        var signIn = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (!signIn.Succeeded)
         {
             var reason = signIn.IsLockedOut
