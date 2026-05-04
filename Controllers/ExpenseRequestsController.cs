@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MultiTenant.Api.Application.Interfaces;
 using MultiTenant.Api.Contracts.ExpenseRequests;
 using MultiTenant.Api.Domain.Entities;
+using MultiTenant.Api.Identity;
 using MultiTenant.Api.Infrastructure.Persistence;
 using System.IdentityModel.Tokens.Jwt;
 
@@ -50,16 +51,38 @@ public sealed class ExpenseRequestsController : ControllerBase
         return Ok(counts);
     }
 
-    [HttpGet]
-    [ProducesResponseType(typeof(ExpenseRequestListEnvelope), StatusCodes.Status200OK)]
-    public async Task<IActionResult> List(
-        [FromQuery] ExpenseRequestStatus? status = null,
-        [FromQuery] string? search = null)
+    /// <summary>KPI cards, year spend, counts, and quick-link paths for the dashboard UI.</summary>
+    [HttpGet("dashboard/overview")]
+    [ProducesResponseType(typeof(ExpenseRequestDashboardOverview), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DashboardOverview([FromQuery] bool forCurrentUser = true)
     {
         if (!_tenant.TenantId.HasValue)
             return Unauthorized("Tenant not resolved.");
 
-        var q = _db.ExpenseRequests.AsNoTracking().Where(x => x.IsActive);
+        var scope = ScopedExpenseRequests(forCurrentUser);
+        var overview = await BuildDashboardOverviewAsync(scope, forCurrentUser);
+        return Ok(overview);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(ExpenseRequestListPageResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List(
+        [FromQuery] ExpenseRequestStatus? status = null,
+        [FromQuery] string? search = null,
+        [FromQuery] bool mine = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        if (!_tenant.TenantId.HasValue)
+            return Unauthorized("Tenant not resolved.");
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var summaryScope = ScopedExpenseRequests(mine);
+        var counts = await BuildDashboardCountsAsync(summaryScope);
+
+        var q = summaryScope;
 
         if (status.HasValue)
             q = q.Where(x => x.Status == status.Value);
@@ -70,37 +93,34 @@ public sealed class ExpenseRequestsController : ControllerBase
             q = q.Where(x => x.RequestNumber.Contains(s) || x.Title.Contains(s));
         }
 
-        var counts = new ExpenseRequestDashboardCounts(
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive),
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive && x.Status == ExpenseRequestStatus.Draft),
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive && x.Status == ExpenseRequestStatus.PendingApproval),
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive && x.Status == ExpenseRequestStatus.Approved),
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive && x.Status == ExpenseRequestStatus.Rejected),
-            await _db.ExpenseRequests.AsNoTracking().CountAsync(x => x.IsActive && x.Status == ExpenseRequestStatus.Completed));
+        var totalCount = await q.CountAsync();
 
         var rows = await q
             .OrderByDescending(x => x.CreatedAtUtc)
-            .Join(_db.Users.AsNoTracking(),
-                e => e.SubmittedByUserId,
-                u => u.Id,
-                (e, u) => new ExpenseRequestListItemResponse(
-                    e.ExpenseRequestId,
-                    e.RequestNumber,
-                    e.Title,
-                    e.ExpenseType,
-                    e.ProjectId,
-                    e.FundingType,
-                    e.Status,
-                    e.TotalAmount,
-                    e.CurrencyCode,
-                    e.SubmittedByUserId,
-                    u.Email,
-                    u.FullName,
-                    e.CreatedAtUtc,
-                    e.SubmittedAtUtc))
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(x => x.ExpenseCategory)
+            .Include(x => x.Approvals)
             .ToListAsync();
 
-        return Ok(new ExpenseRequestListEnvelope(counts, rows));
+        var userIds = new HashSet<Guid>();
+        foreach (var e in rows)
+        {
+            userIds.Add(e.SubmittedByUserId);
+            if (e.Approvals is not null)
+            {
+                foreach (var a in e.Approvals)
+                    userIds.Add(a.ApproverUserId);
+            }
+        }
+
+        var users = await _db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id);
+
+        var items = rows.Select(e => MapToListItem(e, users)).ToList();
+
+        return Ok(new ExpenseRequestListPageResponse(counts, items, totalCount, page, pageSize));
     }
 
     [HttpGet("{expenseRequestId:guid}")]
@@ -137,9 +157,17 @@ public sealed class ExpenseRequestsController : ControllerBase
         if (!_tenant.TenantId.HasValue)
             return Unauthorized("Tenant not resolved.");
 
+        if (request is null)
+            return BadRequest(new { message = "Request body is required." });
+
         var uid = CurrentUserId();
         if (!uid.HasValue)
             return Unauthorized("Invalid user.");
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(new { message = "Title is required." });
+
+        var lines = request.Lines ?? new List<ExpenseRequestLineInput>();
 
         var tenantId = _tenant.TenantId.Value;
         var fundingBudgetErr = ValidateFundingAndBudget(request.FundingType, request.BudgetId);
@@ -153,15 +181,15 @@ public sealed class ExpenseRequestsController : ControllerBase
         if (projectErr is not null)
             return BadRequest(new { message = projectErr });
 
-        var lineErr = await ValidateLineInputsAsync(tenantId, request.Lines);
+        var lineErr = await ValidateLineInputsAsync(tenantId, lines);
         if (lineErr is not null)
             return BadRequest(new { message = lineErr });
 
-        var total = request.Lines.Sum(x => x.Amount);
+        var total = lines.Sum(x => x.Amount);
         if (total <= 0)
             return BadRequest(new { message = "At least one line with a positive amount is required." });
 
-        await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
             var requestNumber = await AllocateRequestNumberAsync(tenantId);
@@ -187,7 +215,7 @@ public sealed class ExpenseRequestsController : ControllerBase
                 CreatedAtUtc = DateTime.UtcNow
             };
 
-            AddLines(entity, request.Lines);
+            AddLines(entity, lines);
             _db.ExpenseRequests.Add(entity);
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -209,9 +237,17 @@ public sealed class ExpenseRequestsController : ControllerBase
         if (!_tenant.TenantId.HasValue)
             return Unauthorized("Tenant not resolved.");
 
+        if (request is null)
+            return BadRequest(new { message = "Request body is required." });
+
         var uid = CurrentUserId();
         if (!uid.HasValue)
             return Unauthorized("Invalid user.");
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            return BadRequest(new { message = "Title is required." });
+
+        var lines = request.Lines ?? new List<ExpenseRequestLineInput>();
 
         var tenantId = _tenant.TenantId.Value;
         var entity = await _db.ExpenseRequests.FirstOrDefaultAsync(x => x.ExpenseRequestId == expenseRequestId);
@@ -234,11 +270,11 @@ public sealed class ExpenseRequestsController : ControllerBase
         if (projectErr is not null)
             return BadRequest(new { message = projectErr });
 
-        var lineErr = await ValidateLineInputsAsync(tenantId, request.Lines);
+        var lineErr = await ValidateLineInputsAsync(tenantId, lines);
         if (lineErr is not null)
             return BadRequest(new { message = lineErr });
 
-        var total = request.Lines.Sum(x => x.Amount);
+        var total = lines.Sum(x => x.Amount);
         if (total <= 0)
             return BadRequest(new { message = "At least one line with a positive amount is required." });
 
@@ -257,7 +293,7 @@ public sealed class ExpenseRequestsController : ControllerBase
         entity.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.ExpenseRequestLines.Where(x => x.ExpenseRequestId == expenseRequestId).ExecuteDeleteAsync();
-        AddLines(entity, request.Lines);
+        AddLines(entity, lines);
 
         await _db.SaveChangesAsync();
         return Ok(await ToDetailAsync(expenseRequestId));
@@ -300,6 +336,12 @@ public sealed class ExpenseRequestsController : ControllerBase
 
         var tenantId = _tenant.TenantId.Value;
 
+        if (body is null)
+            return BadRequest(new { message = "Request body is required (workflowId)." });
+
+        if (body.WorkflowId == Guid.Empty)
+            return BadRequest(new { message = "workflowId is required." });
+
         var entity = await _db.ExpenseRequests
             .Include(x => x.Lines)
             .FirstOrDefaultAsync(x => x.ExpenseRequestId == expenseRequestId);
@@ -309,7 +351,7 @@ public sealed class ExpenseRequestsController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "Only the submitter can submit." });
         if (entity.Status != ExpenseRequestStatus.Draft)
             return BadRequest(new { message = "Request is not in draft status." });
-        if (entity.Lines.Count == 0)
+        if (entity.Lines is null || entity.Lines.Count == 0)
             return BadRequest(new { message = "Add at least one line before submitting." });
 
         var wf = await LoadWorkflowWithScopesAndStepsAsync(body.WorkflowId);
@@ -328,7 +370,8 @@ public sealed class ExpenseRequestsController : ControllerBase
             entity.SubmittedAtUtc = DateTime.UtcNow;
             entity.UpdatedAtUtc = DateTime.UtcNow;
 
-            if (!runChain || wf.Steps.Count == 0)
+            var steps = wf.Steps ?? new List<WorkflowStep>();
+            if (!runChain || steps.Count == 0)
             {
                 entity.Status = ExpenseRequestStatus.Approved;
                 entity.ApprovedAtUtc = DateTime.UtcNow;
@@ -337,9 +380,9 @@ public sealed class ExpenseRequestsController : ControllerBase
             else
             {
                 entity.Status = ExpenseRequestStatus.PendingApproval;
-                entity.CurrentApprovalStepSequence = wf.Steps.OrderBy(s => s.Sequence).First().Sequence;
+                entity.CurrentApprovalStepSequence = steps.OrderBy(s => s.Sequence).First().Sequence;
 
-                foreach (var step in wf.Steps.OrderBy(s => s.Sequence))
+                foreach (var step in steps.OrderBy(s => s.Sequence))
                 {
                     entity.Approvals.Add(new ExpenseRequestApproval
                     {
@@ -483,6 +526,205 @@ public sealed class ExpenseRequestsController : ControllerBase
         return Ok(await ToDetailAsync(expenseRequestId));
     }
 
+    private IQueryable<ExpenseRequest> ScopedExpenseRequests(bool restrictToSubmitter)
+    {
+        var q = _db.ExpenseRequests.AsNoTracking().Where(x => x.IsActive);
+        if (!restrictToSubmitter)
+            return q;
+
+        var uid = CurrentUserId();
+        return uid.HasValue ? q.Where(x => x.SubmittedByUserId == uid.Value) : q.Where(x => false);
+    }
+
+    private static async Task<ExpenseRequestDashboardCounts> BuildDashboardCountsAsync(IQueryable<ExpenseRequest> scope) =>
+        new(
+            await scope.CountAsync(),
+            await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Draft),
+            await scope.CountAsync(x => x.Status == ExpenseRequestStatus.PendingApproval),
+            await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Approved),
+            await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Rejected),
+            await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Completed));
+
+    private async Task<ExpenseRequestDashboardOverview> BuildDashboardOverviewAsync(IQueryable<ExpenseRequest> scope, bool forCurrentUser)
+    {
+        var counts = await BuildDashboardCountsAsync(scope);
+        var (curStart, now, prevStart, curStartExclusive) = PeriodWindows30Day();
+
+        var pendingCount = await scope.CountAsync(x => x.Status == ExpenseRequestStatus.PendingApproval);
+        var pendingCur = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.PendingApproval &&
+            x.SubmittedAtUtc.HasValue &&
+            x.SubmittedAtUtc >= curStart &&
+            x.SubmittedAtUtc <= now);
+        var pendingPrev = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.PendingApproval &&
+            x.SubmittedAtUtc.HasValue &&
+            x.SubmittedAtUtc >= prevStart &&
+            x.SubmittedAtUtc < curStartExclusive);
+        var pending = new ExpenseRequestDashboardKpi(pendingCount, TrendInt(pendingPrev, pendingCur));
+
+        var approvedCount = await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Approved);
+        var apprCur = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.Approved &&
+            x.ApprovedAtUtc.HasValue &&
+            x.ApprovedAtUtc >= curStart &&
+            x.ApprovedAtUtc <= now);
+        var apprPrev = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.Approved &&
+            x.ApprovedAtUtc.HasValue &&
+            x.ApprovedAtUtc >= prevStart &&
+            x.ApprovedAtUtc < curStartExclusive);
+        var approved = new ExpenseRequestDashboardKpi(approvedCount, TrendInt(apprPrev, apprCur));
+
+        var completedCount = await scope.CountAsync(x => x.Status == ExpenseRequestStatus.Completed);
+        var compCur = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.Completed &&
+            x.CompletedAtUtc.HasValue &&
+            x.CompletedAtUtc >= curStart &&
+            x.CompletedAtUtc <= now);
+        var compPrev = await scope.CountAsync(x =>
+            x.Status == ExpenseRequestStatus.Completed &&
+            x.CompletedAtUtc.HasValue &&
+            x.CompletedAtUtc >= prevStart &&
+            x.CompletedAtUtc < curStartExclusive);
+        var completed = new ExpenseRequestDashboardKpi(completedCount, TrendInt(compPrev, compCur));
+
+        var year = DateTime.UtcNow.Year;
+        var spendScope = scope.Where(x =>
+            (x.Status == ExpenseRequestStatus.Completed && x.CompletedAtUtc.HasValue && x.CompletedAtUtc.Value.Year == year) ||
+            (x.Status == ExpenseRequestStatus.Approved && x.ApprovedAtUtc.HasValue && x.ApprovedAtUtc.Value.Year == year));
+        var amount = await spendScope.SumAsync(x => x.TotalAmount);
+        var currency = await spendScope.Select(x => x.CurrencyCode).FirstOrDefaultAsync() ?? "USD";
+
+        var spendCur = await SumSpendApprovedCompletedInclusive(scope, curStart, now);
+        var spendPrev = await SumSpendApprovedCompletedExclusiveEnd(scope, prevStart, curStartExclusive);
+        var spend = new ExpenseRequestDashboardSpend(amount, currency, TrendDecimal(spendPrev, spendCur));
+
+        return new ExpenseRequestDashboardOverview(counts, pending, approved, completed, spend, BuildQuickLinks(forCurrentUser));
+    }
+
+    private static (DateTime curStart, DateTime now, DateTime prevStart, DateTime curStartExclusive) PeriodWindows30Day()
+    {
+        var now = DateTime.UtcNow;
+        var curStart = now.AddDays(-30);
+        var prevStart = now.AddDays(-60);
+        return (curStart, now, prevStart, curStart);
+    }
+
+    private static decimal? TrendInt(int previousPeriodCount, int currentPeriodCount)
+    {
+        if (previousPeriodCount == 0)
+            return currentPeriodCount == 0 ? 0 : null;
+
+        return Math.Round((currentPeriodCount - previousPeriodCount) / (decimal)previousPeriodCount * 100m, 1, MidpointRounding.AwayFromZero);
+    }
+
+    private static decimal? TrendDecimal(decimal previousPeriodSum, decimal currentPeriodSum)
+    {
+        if (previousPeriodSum == 0)
+            return currentPeriodSum == 0 ? 0 : null;
+
+        return Math.Round((currentPeriodSum - previousPeriodSum) / previousPeriodSum * 100m, 1, MidpointRounding.AwayFromZero);
+    }
+
+    private static async Task<decimal> SumSpendApprovedCompletedInclusive(IQueryable<ExpenseRequest> q, DateTime startInclusive, DateTime endInclusive)
+    {
+        return await q.Where(x =>
+                (x.Status == ExpenseRequestStatus.Completed &&
+                 x.CompletedAtUtc.HasValue &&
+                 x.CompletedAtUtc.Value >= startInclusive &&
+                 x.CompletedAtUtc.Value <= endInclusive) ||
+                (x.Status == ExpenseRequestStatus.Approved &&
+                 x.ApprovedAtUtc.HasValue &&
+                 x.ApprovedAtUtc.Value >= startInclusive &&
+                 x.ApprovedAtUtc.Value <= endInclusive))
+            .SumAsync(x => x.TotalAmount);
+    }
+
+    private static async Task<decimal> SumSpendApprovedCompletedExclusiveEnd(IQueryable<ExpenseRequest> q, DateTime startInclusive, DateTime endExclusive)
+    {
+        return await q.Where(x =>
+                (x.Status == ExpenseRequestStatus.Completed &&
+                 x.CompletedAtUtc.HasValue &&
+                 x.CompletedAtUtc.Value >= startInclusive &&
+                 x.CompletedAtUtc.Value < endExclusive) ||
+                (x.Status == ExpenseRequestStatus.Approved &&
+                 x.ApprovedAtUtc.HasValue &&
+                 x.ApprovedAtUtc.Value >= startInclusive &&
+                 x.ApprovedAtUtc.Value < endExclusive))
+            .SumAsync(x => x.TotalAmount);
+    }
+
+    private static ExpenseRequestDashboardQuickLinks BuildQuickLinks(bool forCurrentUser)
+    {
+        var mine = forCurrentUser ? "mine=true&" : string.Empty;
+        return new ExpenseRequestDashboardQuickLinks(
+            $"api/expense-requests?{mine}status=PendingApproval",
+            $"api/expense-requests?{mine}status=Approved",
+            $"api/expense-requests?{mine}status=Completed",
+            string.IsNullOrEmpty(mine) ? "api/expense-requests" : "api/expense-requests?mine=true",
+            "expense-requests/create");
+    }
+
+    private static ExpenseRequestListItemResponse MapToListItem(ExpenseRequest e, IReadOnlyDictionary<Guid, ApplicationUser> users)
+    {
+        users.TryGetValue(e.SubmittedByUserId, out var sub);
+
+        Guid? approvedByUserId = null;
+        Guid? pendingApproverUserId = null;
+
+        var approvals = e.Approvals;
+
+        if (e.Status == ExpenseRequestStatus.PendingApproval && e.CurrentApprovalStepSequence is int seq && approvals is not null)
+        {
+            var pend = approvals.FirstOrDefault(a =>
+                a.StepSequence == seq && a.StepStatus == ExpenseRequestApprovalStatus.Pending);
+            pendingApproverUserId = pend?.ApproverUserId;
+        }
+
+        if (approvals is not null &&
+            (e.Status == ExpenseRequestStatus.Approved || e.Status == ExpenseRequestStatus.Completed))
+        {
+            var last = approvals
+                .Where(a => a.StepStatus == ExpenseRequestApprovalStatus.Approved)
+                .OrderByDescending(a => a.StepSequence)
+                .FirstOrDefault();
+            approvedByUserId = last?.ApproverUserId;
+        }
+
+        ApplicationUser? appr = null;
+        if (approvedByUserId.HasValue)
+            users.TryGetValue(approvedByUserId.Value, out appr);
+
+        ApplicationUser? pendU = null;
+        if (pendingApproverUserId.HasValue)
+            users.TryGetValue(pendingApproverUserId.Value, out pendU);
+
+        return new ExpenseRequestListItemResponse(
+            e.ExpenseRequestId,
+            e.RequestNumber,
+            e.Title,
+            e.ExpenseType,
+            e.ProjectId,
+            e.FundingType,
+            e.Status,
+            e.TotalAmount,
+            e.CurrencyCode,
+            e.SubmittedByUserId,
+            sub?.Email,
+            sub?.FullName,
+            e.CreatedAtUtc,
+            e.SubmittedAtUtc,
+            e.ExpenseCategoryId,
+            e.ExpenseCategory?.Name,
+            approvedByUserId,
+            appr?.Email,
+            appr?.FullName,
+            pendingApproverUserId,
+            pendU?.Email,
+            pendU?.FullName);
+    }
+
     private async Task<string> AllocateRequestNumberAsync(Guid tenantId)
     {
         var year = DateTime.UtcNow.Year;
@@ -532,7 +774,7 @@ public sealed class ExpenseRequestsController : ControllerBase
                 Amount = l.Amount,
                 ExpenseCategoryId = l.ExpenseCategoryId,
                 GlAccountId = l.GlAccountId,
-                VendorId = l.VendorId
+                VendorId = entity.VendorId
             });
         }
     }
@@ -545,7 +787,7 @@ public sealed class ExpenseRequestsController : ControllerBase
         Guid? businessUnitId,
         Guid? budgetId)
     {
-        if (vendorId.HasValue && !await _db.Vendors.AsNoTracking().AnyAsync(x => x.VendorId == vendorId.Value && x.IsActive))
+        if (vendorId.HasValue && !await _db.Vendors.AsNoTracking().AnyAsync(x => x.VendorId == vendorId.Value && x.TenantId == tenantId && x.IsActive))
             return "Vendor is invalid or inactive.";
         if (expenseCategoryId.HasValue && !await _db.ExpenseCategories.AsNoTracking().AnyAsync(x => x.ExpenseCategoryId == expenseCategoryId.Value && x.TenantId == tenantId && x.IsActive))
             return "Expense category is invalid or inactive.";
@@ -574,9 +816,9 @@ public sealed class ExpenseRequestsController : ControllerBase
         return null;
     }
 
-    private async Task<string?> ValidateLineInputsAsync(Guid tenantId, IReadOnlyList<ExpenseRequestLineInput> lines)
+    private async Task<string?> ValidateLineInputsAsync(Guid tenantId, IReadOnlyList<ExpenseRequestLineInput>? lines)
     {
-        if (lines.Count == 0)
+        if (lines is null || lines.Count == 0)
             return "At least one line is required.";
 
         foreach (var l in lines)
@@ -589,8 +831,6 @@ public sealed class ExpenseRequestsController : ControllerBase
                 return "A line references an invalid expense category.";
             if (l.GlAccountId.HasValue && !await _db.GlAccounts.AsNoTracking().AnyAsync(x => x.GlAccountId == l.GlAccountId.Value && x.TenantId == tenantId && x.IsActive))
                 return "A line references an invalid GL account.";
-            if (l.VendorId.HasValue && !await _db.Vendors.AsNoTracking().AnyAsync(x => x.VendorId == l.VendorId.Value && x.IsActive))
-                return "A line references an invalid vendor.";
         }
 
         return null;

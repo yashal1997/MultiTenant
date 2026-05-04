@@ -16,5 +16,13 @@ public sealed record ExpenseRequestListItemResponse(
     string? SubmitterEmail,
     string? SubmitterFullName,
     DateTime CreatedAtUtc,
-    DateTime? SubmittedAtUtc
+    DateTime? SubmittedAtUtc,
+    Guid? ExpenseCategoryId,
+    string? ExpenseCategoryName,
+    Guid? ApprovedByUserId,
+    string? ApprovedByEmail,
+    string? ApprovedByFullName,
+    Guid? PendingApproverUserId,
+    string? PendingApproverEmail,
+    string? PendingApproverFullName
 );
