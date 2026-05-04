@@ -440,8 +440,20 @@ public sealed class BudgetsController : ControllerBase
         if (ids.Count == 0)
             return null;
 
+        var businessUnitDepartmentId = await _db.BusinessUnits.AsNoTracking()
+            .Where(x => x.BusinessUnitId == businessUnitId && x.TenantId == tenantId && x.IsActive)
+            .Select(x => x.DepartmentId)
+            .FirstOrDefaultAsync();
+
         var validIds = await _db.Departments.AsNoTracking()
-            .Where(x => ids.Contains(x.DepartmentId) && x.TenantId == tenantId && x.IsActive && x.PrimaryBusinessUnitId == businessUnitId)
+            .Where(x =>
+                ids.Contains(x.DepartmentId) &&
+                x.TenantId == tenantId &&
+                x.IsActive &&
+                (
+                    x.PrimaryBusinessUnitId == businessUnitId ||
+                    (businessUnitDepartmentId.HasValue && x.DepartmentId == businessUnitDepartmentId.Value)
+                ))
             .Select(x => x.DepartmentId)
             .ToListAsync();
 
